@@ -1,65 +1,77 @@
-data "vsphere_datacenter" "dc" {
-  name = "dc1"
+terraform {
+  required_providers {
+    vsphere = {
+      source = "hashicorp/vsphere"
+      version = "2.1.1"
+    }
+  }
+}
+
+provider "vsphere" {
+  user           = " "
+  password       = " "
+  vsphere_server = " "
+
+  # If you have a self-signed cert
+  allow_unverified_ssl = true
+}
+
+data "vsphere_datacenter" "datacenter" {
+  name = "VC1-Datacenter"
 }
 
 data "vsphere_datastore" "datastore" {
-  name          = "datastore1"
-  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+  name          = "DS01-M3"
+  datacenter_id = data.vsphere_datacenter.datacenter.id
 }
 
 data "vsphere_compute_cluster" "cluster" {
-  name          = "cluster1"
-  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+  name          = "VC1-Cluster"
+  datacenter_id = data.vsphere_datacenter.datacenter.id
 }
 
 data "vsphere_network" "network" {
-  name          = "public"
-  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+  name          = "VM Network"
+  datacenter_id = data.vsphere_datacenter.datacenter.id
 }
 
 data "vsphere_virtual_machine" "template" {
-  name          = "ubuntu-16.04"
-  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+  name          = "ubuntu-template-v2"
+  datacenter_id = data.vsphere_datacenter.datacenter.id
 }
 
 resource "vsphere_virtual_machine" "vm" {
-  name             = "terraform-test"
-  resource_pool_id = "${data.vsphere_compute_cluster.cluster.resource_pool_id}"
-  datastore_id     = "${data.vsphere_datastore.datastore.id}"
-
-  num_cpus = 2
-  memory   = 1024
-  guest_id = "${data.vsphere_virtual_machine.template.guest_id}"
-
-  scsi_type = "${data.vsphere_virtual_machine.template.scsi_type}"
-
+  name             = "20220426-CCOID"
+  resource_pool_id = data.vsphere_compute_cluster.cluster.resource_pool_id
+  datastore_id     = data.vsphere_datastore.datastore.id
+  num_cpus         = 1
+  memory           = 2048
+  guest_id         = data.vsphere_virtual_machine.template.guest_id
+  scsi_type        = data.vsphere_virtual_machine.template.scsi_type
   network_interface {
-    network_id   = "${data.vsphere_network.network.id}"
-    adapter_type = "${data.vsphere_virtual_machine.template.network_interface_types[0]}"
+    network_id   = data.vsphere_network.network.id
+    adapter_type = data.vsphere_virtual_machine.template.network_interface_types[0]
   }
+  wait_for_guest_ip_timeout = 1
+  wait_for_guest_net_timeout = -1
 
   disk {
     label            = "disk0"
-    size             = "${data.vsphere_virtual_machine.template.disks.0.size}"
-    eagerly_scrub    = "${data.vsphere_virtual_machine.template.disks.0.eagerly_scrub}"
-    thin_provisioned = "${data.vsphere_virtual_machine.template.disks.0.thin_provisioned}"
+    size             = data.vsphere_virtual_machine.template.disks.0.size
+    thin_provisioned = data.vsphere_virtual_machine.template.disks.0.thin_provisioned
   }
-
   clone {
-    template_uuid = "${data.vsphere_virtual_machine.template.id}"
-
+    template_uuid = data.vsphere_virtual_machine.template.id
     customize {
       linux_options {
-        host_name = "terraform-test"
-        domain    = "test.internal"
+        host_name = "hello-world"
+        domain    = "example.com"
       }
-
       network_interface {
-        ipv4_address = "10.0.0.10"
+        ipv4_address = "172.16.11.199"
         ipv4_netmask = 24
       }
-
-      ipv4_gateway = "10.0.0.1"
+      ipv4_gateway = "172.16.10.254"
     }
   }
 }
